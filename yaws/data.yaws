@@ -1,0 +1,31 @@
+<erl>
+-include("/Users/vovka/Documents/Erlang/yaws/src/config.hrl").
+
+
+
+jdata_to_erl({array, Data}) ->
+    lists:foldl(
+        fun({array, [Paper, Time, Cost, Value]}, Acc) ->
+            AtomPaper = list_to_atom(Paper),
+            case dict:find(AtomPaper, Acc) of
+                {ok, _} ->
+                    dict:append(AtomPaper, {Time, {Cost, Value}}, Acc);
+                error ->
+                    dict:store(AtomPaper, [{Time, {Cost, Value}}], Acc)
+            end
+        end,
+        dict:new(),
+        Data
+    ).
+
+out(A) ->
+    {ok, JsonData} = yaws_api:postvar(A, request),
+    {ok, {struct, ErlData}} = json:decode_string(JsonData),
+    {value, {method, Method}} = lists:keysearch(method, 1, ErlData),
+    {value, {data, Data}} = lists:keysearch(data, 1, ErlData),
+    
+    ParsedData = jdata_to_erl(Data),
+    io:format("~p~n  ~p~n  ~p~n", [Method, Data, dict:to_list(ParsedData)]),
+    {content, "application/json", "{}"}.
+
+</erl>

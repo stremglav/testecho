@@ -1,0 +1,20 @@
+<head>
+    <title>Hello world using Yaws</title>
+    <script src="/js/jquery-1.7.1.js"></script>
+    <script src="/js/bootstrap.js"></script>
+</head>
+<body>
+Yahooooo!!!
+<script>
+    jQuery(function(){
+        jQuery.post(
+            '/data.yaws', 
+            {'request' : '{"method": "add_records", "data": [["echo", 1, 1, 1], ["echo", 2, 2, 2], ["apple", 3, 3, 3], ["echo", 4, 4, 4]]}'},
+            function(data) {
+                console.log(data);
+        });
+    })
+</script>
+
+</body>
+
