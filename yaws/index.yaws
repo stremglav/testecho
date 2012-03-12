@@ -1,20 +1,132 @@
+<!DOCTYPE html>
+<html>
 <head>
-    <title>Hello world using Yaws</title>
+    <meta charset="utf-8">
+    <title>Generator</title>
+
+    <link href="/css/bootstrap.css" rel="stylesheet">
+    <link href="/css/bootstrap-responsive.css" rel="stylesheet">
+    <link href="/css/jquery-ui-1.8.18.custom.css" rel="stylesheet">
+
     <script src="/js/jquery-1.7.1.js"></script>
+    <script src="/js/jquery-ui-1.8.18.custom.min.js"></script>
+    <script src="/js/jquery-ui-timepicker-addon.js"></script>
+
     <script src="/js/bootstrap.js"></script>
+    <script src="/js/json-js/json2.js"></script>
+    <script src="/js/functions.js"></script>
+    <script src="/js/add_datepicker.js"></script>
+
 </head>
 <body>
-Yahooooo!!!
-<script>
-    jQuery(function(){
-        jQuery.post(
-            '/data.yaws', 
-            {'request' : '{"method": "add_records", "data": [["echo", 1, 1, 1], ["echo", 2, 2, 2], ["apple", 3, 3, 3], ["echo", 4, 4, 4]]}'},
-            function(data) {
-                console.log(data);
-        });
-    })
-</script>
+<div class="container">
+    <div class="row show-grid">
+        <div class="span12">
+          <center><h2>Генератор запросов</h2></center>
+          <br />
+          <div class="row show-grid">
+            <div class="span6">
+                <form class="form-horizontal"
+                      onsubmit="javascript: gen_add_data('add_papers', 'add_paper_nums', 'add_result', 'import_button'); return false;">
+                <fieldset>
+                <legend>Форма генерации данных для импорта</legend>
+                    <div class="control-group">
+                        <label class="control-label" for="add_papers">Ценные бумаги:</label>
+                        <div class="controls">
+                            <input type="text" class="span4" id="add_papers" value="echo, apple, google">
+                            <p class="help-block">Пример: echo, apple</p>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label" for="add_paper_nums">Количество записей:</label>
+                        <div class="controls">
+                            <input type="text" class="input-mini" id="add_paper_nums" value="3">
+                            <p class="help-block">Будет сгенерированно для каждой бумаги</p>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" type="submit">Генерировать</button>
+                    </div>
+                </fieldset>
+                </form>
+                <h3>Результат</h3>
+                <div id="add_import_res"></div>
+                <div class="control-group">
+                    <textarea id="add_result" class="span6" rows="9"></textarea>
+                </div>
+                <div class="form-actions">
+                    <center>
+                        <button id="import_button"
+                                class="btn btn-primary disabled"
+                                disabled
+                                type="submit"
+                                onclick="javascript: import_data('add_result', 'add_import_res');"
+                                >Импортировать</button>
+                    </center>
+                </div>
 
+            </div>
+            <div class="span6">
+                <form class="form-horizontal"
+                      onsubmit="javascript: gen_fetch_data('get_paper', 'get_scale', 'get_start_time', 'get_finish_time', 'get_gen_result', 'fetch_button'); return false;">
+                <fieldset>
+                <legend>Форма для выборки данных</legend>
+                    <div class="control-group">
+                        <label class="control-label" for="get_paper">Ценная бумага:</label>
+                        <div class="controls">
+                            <input type="text" class="span4" id="get_paper" value="echo">
+                            <p class="help-block">Введите название ценной бумаги для выборки</p>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label" for="get_scale">Масштаб:</label>
+                        <div class="controls">
+                            <select id="get_scale">
+                                <option value="minute">Минута</option>
+                                <option value="hour">Час</option>
+                                <option value="day">День</option>
+                                <option value="week">Неделя</option>
+                                <option value="month">Месяц</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label" for="get_start_time">Время начала выборки:</label>
+                        <div class="controls">
+                            <input type="text" class="span4" id="get_start_time" value="03/01/2012 00:00">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label" for="get_finish_time">Время окончания выборки:</label>
+                        <div class="controls">
+                            <input type="text" class="span4" id="get_finish_time" value="03/12/2012 02:13">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" type="submit">Генерировать</button>
+                    </div>
+                </fieldset>
+                </form>
+                <h3>Результат</h3>
+                <div class="control-group">
+                    <textarea id="get_gen_result" class="span6" rows="3"></textarea>
+                </div>
+                <div class="form-actions">
+                    <center>
+                        <button id="fetch_button"
+                                class="btn btn-primary disabled"
+                                disabled
+                                type="submit"
+                                onclick="javascript: fetch('get_gen_result', 'get_result');"
+                                >Сделать выборку</button>
+                    </center>
+                </div>
+            </div>
+          </div>
+        <center><h2>Тут будет результат выборки</h2></center>
+        <div id="get_result"></div>
+        </div>
+    </div>
+</div>
 </body>
-
+</html>

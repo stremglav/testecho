@@ -1,9 +1,21 @@
 <erl>
--include("/Users/vovka/Documents/Erlang/yaws/src/config.hrl").
+-include("/Users/vovka/Documents/Erlang/yaws/config.hrl").
 
 
+add_records(Data) ->
+    dict:map(
+        fun (Paper, PaperData) ->
+            atom_to_list( add_paper_records(Paper, PaperData))
+        end,
+        Data
+    ).
 
-jdata_to_erl({array, Data}) ->
+
+add_paper_records(Paper, Data) ->
+    gen_server:call({?NODE_LIST_MODULE, ?NODE_LIST_NAME}, {add_records, Paper, Data}).
+
+
+jadd_to_erl({array, Data}) ->
     lists:foldl(
         fun({array, [Paper, Time, Cost, Value]}, Acc) ->
             AtomPaper = list_to_atom(Paper),
@@ -18,14 +30,54 @@ jdata_to_erl({array, Data}) ->
         Data
     ).
 
+get_paper_records(Paper, Data) ->
+    gen_server:call({?NODE_LIST_MODULE, ?NODE_LIST_NAME}, {get_records, Paper, Data}).
+
+jget_to_erl({array, [Paper, StartTime, FinishTime, Scale]}) ->
+    {list_to_atom(Paper), {StartTime, FinishTime, list_to_atom(Scale)}}.
+
+erldata_to_jdata(L) ->
+    Result = lists:map(
+        fun({Time, [{CostOpen, CostClose, MinCost, MaxCost, Value}]}) ->
+            {array, [erlang:integer_to_list(Time),
+                     erlang:integer_to_list(CostOpen),
+                     erlang:integer_to_list(CostClose),
+                     erlang:integer_to_list(MinCost),
+                     erlang:integer_to_list(MaxCost),
+                     erlang:integer_to_list(Value)]}
+        end,
+        L
+    ),
+    {array, Result}.
+
 out(A) ->
     {ok, JsonData} = yaws_api:postvar(A, request),
     {ok, {struct, ErlData}} = json:decode_string(JsonData),
     {value, {method, Method}} = lists:keysearch(method, 1, ErlData),
     {value, {data, Data}} = lists:keysearch(data, 1, ErlData),
-    
-    ParsedData = jdata_to_erl(Data),
-    io:format("~p~n  ~p~n  ~p~n", [Method, Data, dict:to_list(ParsedData)]),
-    {content, "application/json", "{}"}.
+
+    Result = case Method of
+        "add_records" ->
+            ParsedData = jadd_to_erl(Data),
+            Res = dict:to_list(add_records(ParsedData)),
+            {struct, Res};
+        "get_records" ->
+            T1 = erlang:now(),
+            {Paper, ParsedData} = jget_to_erl(Data),
+            T2 = erlang:now(),
+            DictData = get_paper_records(Paper, ParsedData),
+            T3 = erlang:now(),
+            ListData = dict:to_list(DictData),
+            T4 = erlang:now(),
+            Res = lists:sort(ListData),
+            T5 = erlang:now(),
+            JData = erldata_to_jdata(Res),
+            T6 = erlang:now(),
+            io:format("Get Data time: ~p~nTo list time ~p~nSort time ~p~nJdata parse: ~p~n",
+                      [timer:now_diff(T3, T2),timer:now_diff(T4, T3),timer:now_diff(T5, T4),timer:now_diff(T6, T5)]),
+            JData
+    end,
+
+    {content, "application/json", lists:flatten(json:encode(Result))}.
 
 </erl>

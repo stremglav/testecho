@@ -820,6 +820,13 @@ textarea[readonly] {
   background-color: #dff0d8;
   border-color: #468847;
 }
+.notice {
+  color: blue;
+  background-color: #b4d3ff;
+  border-color: #2137ff;
+  margin: 5px;
+  padding: 5px;
+}
 input:focus:required:invalid, textarea:focus:required:invalid, select:focus:required:invalid {
   color: #b94a48;
   border-color: #ee5f5b;
