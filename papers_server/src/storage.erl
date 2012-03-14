@@ -35,13 +35,10 @@ read(StartTime, FinishTime, _, _) when StartTime > FinishTime ->
     [];
 
 read(StartTime, FinishTime, Scale, Storage) ->
-T1 = erlang:now(),
     Frame = ets:select(
         Storage, 
         [{{'$1','_'},[{'and',{'>=','$1',StartTime},{'=<','$1',FinishTime}}],['$_']}]
     ),
-T2 = erlang:now(),
-%    Compressed = ets:new(tmp_data, [ordered_set]),
     Compressed = lists:foldl(
         fun({T, D}, Acc) ->
             RoundedTime = timestamp_round(T, Scale),
@@ -51,48 +48,31 @@ T2 = erlang:now(),
                 false->
                   [{RoundedTime, [D]} | Acc]
               end
-            
-%            IsInserted = ets:insert_new(Compressed, [{RoundedTime, [D]}]),
-%            if 
-%                IsInserted ->
-%                    ok;
-%                true ->
-%                    [{_, SubData}] = ets:lookup(Compressed, RoundedTime),
-%                    ets:insert(Compressed, {RoundedTime, SubData ++ [D]})
-%            end
         end,
         [],
         Frame
     ),
-T3 = erlang:now(),
-%    Result = ets:foldl(
-%        fun({T, L}, Acc) ->
-%             {CostOpen, CostClose, MinCost, MaxCost, AValue}= gen_data_record(L),
-%            Acc ++ [[T, CostOpen, CostClose, MinCost, MaxCost, AValue]]
-%        end,
-%        [],
-%        Compressed
-%    ),
     Result = lists:foldl(
         fun({T, L}, Acc) ->
-             {CostOpen, CostClose, MinCost, MaxCost, AValue} = gen_data_record(L),
-            [[T, CostOpen, CostClose, MinCost, MaxCost, AValue] | Acc]
+            case L of
+                [{Cost, Value}] ->
+                    [{array, [T, Cost, Cost, Cost, Cost, Value]} | Acc];
+                _ ->
+                    [CostOpen, CostClose, MinCost, MaxCost, AValue] = gen_data_record(L),
+                    [{array, [T, CostOpen, CostClose, MinCost, MaxCost, AValue]} | Acc]
+            end
         end,
         [],
         Compressed
     ),
-
-T4 = erlang:now(),
-io:format("Filter: ~p~nCompressed: ~p~nLast ~p~n",
-          [timer:now_diff(T2, T1),timer:now_diff(T3, T2),timer:now_diff(T4, T3)]),
-    Result.
+    {array, Result}.
 
 gen_data_record([{HCost, HValue}|T]) ->
     lists:foldl(
-        fun({Cost, Value}, {_CostOpen, CostClose, MinCost, MaxCost, AValue}) ->
-            {Cost, CostClose, erlang:min(MinCost, Cost), erlang:max(MaxCost, Cost), AValue + Value}
+        fun({Cost, Value}, [_CostOpen, CostClose, MinCost, MaxCost, AValue]) ->
+            [Cost, CostClose, erlang:min(MinCost, Cost), erlang:max(MaxCost, Cost), AValue + Value]
         end,
-        {HCost, HCost,HCost, HCost, HValue},
+        [HCost, HCost,HCost, HCost, HValue],
         T
     ).
 
@@ -214,16 +194,16 @@ get_norm_speed(N, Gap, Scale, Acc) ->
 selftest() ->
 
 %    get_norm_speed(6, 15*24*3600, minute, []),
-%    get_norm_speed(6, 15*24*3600, hour, []),
+    get_norm_speed(6, 15*24*3600, hour, []),
 %    get_norm_speed(6, 15*24*3600, day, []),
 %    get_norm_speed(6, 15*24*3600, week, []),
     get_norm_speed(6, 15*24*3600, month, []),
 
-%    get_norm_speed(6, 1*24*3600, minute, []),
+    get_norm_speed(6, 1*24*3600, minute, []),
 %    get_norm_speed(6, 1*24*3600, hour, []),
 %    get_norm_speed(6, 1*24*3600, day, []),
 %    get_norm_speed(6, 1*24*3600, week, []),
-%    get_norm_speed(6, 1*24*3600, month, []),
+    get_norm_speed(6, 1*24*3600, month, []),
 
 
     NewShould = [{123,{123,123}}],

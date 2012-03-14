@@ -62,19 +62,8 @@ out(A) ->
             Res = dict:to_list(add_records(ParsedData)),
             {struct, Res};
         "get_records" ->
-            T1 = erlang:now(),
             {Paper, ParsedData} = jget_to_erl(Data),
-            T2 = erlang:now(),
-            DictData = get_paper_records(Paper, ParsedData),
-            T3 = erlang:now(),
-            ListData = dict:to_list(DictData),
-            T4 = erlang:now(),
-            Res = lists:sort(ListData),
-            T5 = erlang:now(),
-            JData = erldata_to_jdata(Res),
-            T6 = erlang:now(),
-            io:format("Get Data time: ~p~nTo list time ~p~nSort time ~p~nJdata parse: ~p~n",
-                      [timer:now_diff(T3, T2),timer:now_diff(T4, T3),timer:now_diff(T5, T4),timer:now_diff(T6, T5)]),
+            JData = get_paper_records(Paper, ParsedData),
             JData
     end,
 

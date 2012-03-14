@@ -1,1 +1,3 @@
-http://127.0.0.1:8080/data.yaws POST request={"method"%3A"get_records"%2C"data"%3A["echo"%2C1330545600%2C1331503980%2C"minute"]}
+#http://127.0.0.1:8080/data.yaws POST request={"method"%3A"get_records"%2C"data"%3A["echo"%2C1330545600%2C1331503980%2C"day"]}
+#http://127.0.0.1:8080/data.yaws POST request={"method"%3A"get_records"%2C"data"%3A["echo"%2C1330646400%2C1330819200%2C"hour"]}
+http://127.0.0.1:8080/data.yaws POST request={"method"%3A"get_records"%2C"data"%3A["echo"%2C1330545600%2C1330632000%2C"minute"]}
