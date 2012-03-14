@@ -9,72 +9,95 @@
         timestamp_to_datetime/1,
         timestamp_round/2,
         datetime_to_timestamp/1,
-        selftest/0]).
+        selftest/0,
+        test/0]).
 
 new() -> 
-    dict:new().
+    ets:new(?MODULE,  [ordered_set]).
 
 new([]) ->
-    dict:new();
+    ets:new(?MODULE,  [ordered_set]);
 new(Args) ->
-    lists:foldl(
-        fun({Time, {Cost, Value}}, Acc) ->
-            save(Time, {Cost, Value}, Acc) end,
-        dict:new(),
-        Args).
+    Table = ets:new(?MODULE,  [ordered_set]),
+    ets:insert(Table, Args),
+    Table.
 
-save(Time, Data, Dict) ->
-    dict:store(Time, Data, Dict).
+save(Time, Data, Storage) ->
+    ets:insert(Storage, {Time, Data}),
+    Storage.
 
-save_list(Records, Dict) ->
-    lists:foldl(
-        fun({Time, {Cost, Value}}, Acc) ->
-            save(Time, {Cost, Value}, Acc) end,
-        Dict,
-        Records).
+save_list(Records, Storage) ->
+    ets:insert(Storage, Records),
+    Storage.
 
 
 read(StartTime, FinishTime, _, _) when StartTime > FinishTime ->
     [];
 
-read(StartTime, FinishTime, Scale, Dict) ->
-    Frame = dict:filter(
-        fun(K, _V) ->
-            ((K >= StartTime) and (K =< FinishTime)) end,
-        Dict),
-    Compressed = dict:fold(
-        fun(K, V, Acc) ->
-            T = timestamp_round(K, Scale),
-            dict:append(T, {K, V}, Acc)
+read(StartTime, FinishTime, Scale, Storage) ->
+T1 = erlang:now(),
+    Frame = ets:select(
+        Storage, 
+        [{{'$1','_'},[{'and',{'>=','$1',StartTime},{'=<','$1',FinishTime}}],['$_']}]
+    ),
+T2 = erlang:now(),
+%    Compressed = ets:new(tmp_data, [ordered_set]),
+    Compressed = lists:foldl(
+        fun({T, D}, Acc) ->
+            RoundedTime = timestamp_round(T, Scale),
+              case lists:keyfind(RoundedTime, 1, Acc) of
+                {_K,V}->
+                  lists:keyreplace(RoundedTime, 1, Acc, {RoundedTime, [D|V]});
+                false->
+                  [{RoundedTime, [D]} | Acc]
+              end
+            
+%            IsInserted = ets:insert_new(Compressed, [{RoundedTime, [D]}]),
+%            if 
+%                IsInserted ->
+%                    ok;
+%                true ->
+%                    [{_, SubData}] = ets:lookup(Compressed, RoundedTime),
+%                    ets:insert(Compressed, {RoundedTime, SubData ++ [D]})
+%            end
         end,
-        dict:new(),
+        [],
         Frame
     ),
-    Result = dict:fold(
-        fun(K, V, Acc) ->
-            {MinCost, MaxCost, AccValue} = gen_data_record(V),
-            {_, {CostOpen,_}} = lists:min(V),
-            {_, {CostClose,_}} = lists:max(V),
-            dict:append(K, {CostOpen, CostClose, MinCost, MaxCost, AccValue}, Acc)
+T3 = erlang:now(),
+%    Result = ets:foldl(
+%        fun({T, L}, Acc) ->
+%             {CostOpen, CostClose, MinCost, MaxCost, AValue}= gen_data_record(L),
+%            Acc ++ [[T, CostOpen, CostClose, MinCost, MaxCost, AValue]]
+%        end,
+%        [],
+%        Compressed
+%    ),
+    Result = lists:foldl(
+        fun({T, L}, Acc) ->
+             {CostOpen, CostClose, MinCost, MaxCost, AValue} = gen_data_record(L),
+            [[T, CostOpen, CostClose, MinCost, MaxCost, AValue] | Acc]
         end,
-        dict:new(),
+        [],
         Compressed
     ),
+
+T4 = erlang:now(),
+io:format("Filter: ~p~nCompressed: ~p~nLast ~p~n",
+          [timer:now_diff(T2, T1),timer:now_diff(T3, T2),timer:now_diff(T4, T3)]),
     Result.
 
-
-gen_data_record([{_, {CostHead, ValueHead}}|T]) ->
+gen_data_record([{HCost, HValue}|T]) ->
     lists:foldl(
-        fun({_, {Cost, Value}}, {MinCost, MaxCost, AccValue}) ->
-            {erlang:min(MinCost, Cost), erlang:max(MaxCost, Cost), Value + AccValue}
+        fun({Cost, Value}, {_CostOpen, CostClose, MinCost, MaxCost, AValue}) ->
+            {Cost, CostClose, erlang:min(MinCost, Cost), erlang:max(MaxCost, Cost), AValue + Value}
         end,
-        {CostHead, CostHead, ValueHead},
+        {HCost, HCost,HCost, HCost, HValue},
         T
     ).
 
-
-show(Dict) ->
-    lists:sort(dict:to_list(Dict)).
+show(Storage) ->
+    ets:tab2list(Storage).
 
 timestamp_to_datetime(T) ->
     calendar:now_to_universal_time({T div 1000000, T rem 1000000, 0}).
@@ -113,6 +136,40 @@ rand_between(Min, Max) ->
     Min + random:uniform(Max - Min + 1).
 
 
+test() ->
+    TestData = [
+        {1329410762,{427,788}},
+        {1330243277,{795,459}},
+        {1329242146,{495,702}},
+        {1330321067,{725,612}},
+        {1330533716,{945,375}},
+        {1328913438,{282,35}},
+        {1329107393,{431,505}},
+        {1329277533,{323,154}},
+        {1328845041,{382,300}},
+        {1330338185,{266,281}},
+        {1331197296,{878,84}}, %max time
+        {1328907949,{310,271}},
+        {1328911458,{653,574}},
+        {1330952704,{640,795}},
+        {1329189167,{546,722}},
+        {1330372514,{179,679}}, 
+        {1329693823,{785,169}},
+        {1330405480,{501,368}},
+        {1328898226,{500,58}},
+        {1330444108,{800,756}},
+        {1330307925,{262,174}},
+        {1330020157,{402,934}},
+        {1328833307,{566,880}}, %min time
+        {1329537775,{561,902}},
+        {1328949532,{935,919}}
+    ],
+
+    S = new(TestData),
+
+    io:format("~p~n~n", [read(1329277533, 1330405480, minute, S)]),
+    read(1329277533, 1330405480, day, S).
+
 
 %%%%
 %% Dict speed tests
@@ -144,36 +201,29 @@ get_norm_speed(N, Gap, Scale, Acc) ->
 
     RightBound = 1330647707, %{{2012,3,2},{0,21,47}}
     LeftBound = RightBound - Gap,
-    
     T1 = erlang:now(),
     ReadSpeedRes = read(LeftBound, RightBound, Scale, S0),
     T2 = erlang:now(),
-    Count = erlang:length(show(ReadSpeedRes)),
+    Count = erlang:length(ReadSpeedRes),
     Time = timer:now_diff(T2, T1),
+
     get_norm_speed(N - 1, Gap, Scale, Acc ++ [{Count, Time}]).
+
 
 
 selftest() ->
 
-    io:format("round_ts 1: ~p~n", [datetime:round_ts(1328818907,1)]),
-    io:format("round_ts 2: ~p~n", [datetime:round_ts(1328818907,2)]),
-    io:format("round_ts 3: ~p~n", [datetime:round_ts(1328818907,3)]),
-    io:format("round_ts 4: ~p~n", [datetime:round_ts(1328818907,4)]),
-    io:format("round_ts 5: ~p~n", [datetime:round_ts(1328818907,5)]),
-
-    %timer:tc(fun()-> lists:map(fun(_)-> datetime:round_ts(1328818907,1) end, lists:seq(1,10000)) end).
-    %timer:tc(fun()-> lists:map(fun(_)-> storage:timestamp_round(1328818907, minute) end, lists:seq(1,10000)) end).
-
-    get_norm_speed(6, 15*24*3600, minute, []),
-    get_norm_speed(6, 1*24*3600, minute, []),
-    get_norm_speed(6, 15*24*3600, hour, []),
-    get_norm_speed(6, 1*24*3600, hour, []),
-    get_norm_speed(6, 15*24*3600, day, []),
-    get_norm_speed(6, 1*24*3600, day, []),
-    get_norm_speed(6, 15*24*3600, week, []),
-    get_norm_speed(6, 1*24*3600, week, []),
+%    get_norm_speed(6, 15*24*3600, minute, []),
+%    get_norm_speed(6, 15*24*3600, hour, []),
+%    get_norm_speed(6, 15*24*3600, day, []),
+%    get_norm_speed(6, 15*24*3600, week, []),
     get_norm_speed(6, 15*24*3600, month, []),
-    get_norm_speed(6, 1*24*3600, month, []),
+
+%    get_norm_speed(6, 1*24*3600, minute, []),
+%    get_norm_speed(6, 1*24*3600, hour, []),
+%    get_norm_speed(6, 1*24*3600, day, []),
+%    get_norm_speed(6, 1*24*3600, week, []),
+%    get_norm_speed(6, 1*24*3600, month, []),
 
 
     NewShould = [{123,{123,123}}],
@@ -224,33 +274,34 @@ selftest() ->
 
     S2 = new(TestData),
 
-    MinuteReadRes = show(read(1328833307, 1331197296, minute, S2)),
+    MinuteReadRes = read(1328833307, 1331197296, minute, S2),
+
     MinuteReadShould =
-              [{1328833260,[{566,566,566,566,880}]},
-              {1328845020,[{382,382,382,382,300}]},
-              {1328898180,[{500,500,500,500,58}]},
-              {1328907900,[{310,310,310,310,271}]},
-              {1328911440,[{653,653,653,653,574}]},
-              {1328913420,[{282,282,282,282,35}]},
-              {1328949480,[{935,935,935,935,919}]},
-              {1329107340,[{431,431,431,431,505}]},
-              {1329189120,[{546,546,546,546,722}]},
-              {1329242100,[{495,495,495,495,702}]},
-              {1329277500,[{323,323,323,323,154}]},
-              {1329410760,[{427,427,427,427,788}]},
-              {1329537720,[{561,561,561,561,902}]},
-              {1329693780,[{785,785,785,785,169}]},
-              {1330020120,[{402,402,402,402,934}]},
-              {1330243260,[{795,795,795,795,459}]},
-              {1330307880,[{262,262,262,262,174}]},
-              {1330321020,[{725,725,725,725,612}]},
-              {1330338180,[{266,266,266,266,281}]},
-              {1330372500,[{179,179,179,179,679}]},
-              {1330405440,[{501,501,501,501,368}]},
-              {1330444080,[{800,800,800,800,756}]},
-              {1330533660,[{945,945,945,945,375}]},
-              {1330952700,[{640,640,640,640,795}]},
-              {1331197260,[{878,878,878,878,84}]}],
+              [[1328833260,566,566,566,566,880],
+               [1328845020,382,382,382,382,300],
+               [1328898180,500,500,500,500,58],
+               [1328907900,310,310,310,310,271],
+               [1328911440,653,653,653,653,574],
+               [1328913420,282,282,282,282,35],
+               [1328949480,935,935,935,935,919],
+               [1329107340,431,431,431,431,505],
+               [1329189120,546,546,546,546,722],
+               [1329242100,495,495,495,495,702],
+               [1329277500,323,323,323,323,154],
+               [1329410760,427,427,427,427,788],
+               [1329537720,561,561,561,561,902],
+               [1329693780,785,785,785,785,169],
+               [1330020120,402,402,402,402,934],
+               [1330243260,795,795,795,795,459],
+               [1330307880,262,262,262,262,174],
+               [1330321020,725,725,725,725,612],
+               [1330338180,266,266,266,266,281],
+               [1330372500,179,179,179,179,679],
+               [1330405440,501,501,501,501,368],
+               [1330444080,800,800,800,800,756],
+               [1330533660,945,945,945,945,375],
+               [1330952700,640,640,640,640,795],
+               [1331197260,878,878,878,878,84]],
     
     if
         MinuteReadShould == MinuteReadRes ->
@@ -259,32 +310,32 @@ selftest() ->
             io:format("read minute scale check: false~n")
     end,
 
-    HourReadRes = show(read(1328833307, 1331197296, hour, S2)),
+    HourReadRes = read(1328833307, 1331197296, hour, S2),
     HourReadShould =
-        [{1328832000,[{566,566,566,566,880}]},
-        {1328842800,[{382,382,382,382,300}]},
-        {1328896800,[{500,500,500,500,58}]},
-        {1328907600,[{310,310,310,310,271}]},
-        {1328911200,[{653,282,282,653,609}]},
-        {1328947200,[{935,935,935,935,919}]},
-        {1329105600,[{431,431,431,431,505}]},
-        {1329188400,[{546,546,546,546,722}]},
-        {1329238800,[{495,495,495,495,702}]},
-        {1329274800,[{323,323,323,323,154}]},
-        {1329408000,[{427,427,427,427,788}]},
-        {1329537600,[{561,561,561,561,902}]},
-        {1329692400,[{785,785,785,785,169}]},
-        {1330020000,[{402,402,402,402,934}]},
-        {1330243200,[{795,795,795,795,459}]},
-        {1330304400,[{262,262,262,262,174}]},
-        {1330318800,[{725,725,725,725,612}]},
-        {1330336800,[{266,266,266,266,281}]},
-        {1330369200,[{179,179,179,179,679}]},
-        {1330405200,[{501,501,501,501,368}]},
-        {1330441200,[{800,800,800,800,756}]},
-        {1330531200,[{945,945,945,945,375}]},
-        {1330952400,[{640,640,640,640,795}]},
-        {1331197200,[{878,878,878,878,84}]}],
+        [[1328832000,566,566,566,566,880],
+         [1328842800,382,382,382,382,300],
+         [1328896800,500,500,500,500,58],
+         [1328907600,310,310,310,310,271],
+         [1328911200,653,282,282,653,609],
+         [1328947200,935,935,935,935,919],
+         [1329105600,431,431,431,431,505],
+         [1329188400,546,546,546,546,722],
+         [1329238800,495,495,495,495,702],
+         [1329274800,323,323,323,323,154],
+         [1329408000,427,427,427,427,788],
+         [1329537600,561,561,561,561,902],
+         [1329692400,785,785,785,785,169],
+         [1330020000,402,402,402,402,934],
+         [1330243200,795,795,795,795,459],
+         [1330304400,262,262,262,262,174],
+         [1330318800,725,725,725,725,612],
+         [1330336800,266,266,266,266,281],
+         [1330369200,179,179,179,179,679],
+         [1330405200,501,501,501,501,368],
+         [1330441200,800,800,800,800,756],
+         [1330531200,945,945,945,945,375],
+         [1330952400,640,640,640,640,795],
+         [1331197200,878,878,878,878,84]],
 
     if
         HourReadShould == HourReadRes ->
@@ -294,23 +345,24 @@ selftest() ->
     end,
     
 
-    DayReadRes = show(read(1328833307, 1331197296, day, S2)),
+    DayReadRes = read(1328833307, 1331197296, day, S2),
     DayReadShould = 
-       [{1328832000,[{566,282,282,653,2118}]},
-       {1328918400,[{935,935,935,935,919}]},
-       {1329091200,[{431,431,431,431,505}]},
-       {1329177600,[{546,495,495,546,1424}]},
-       {1329264000,[{323,323,323,323,154}]},
-       {1329350400,[{427,427,427,427,788}]},
-       {1329523200,[{561,561,561,561,902}]},
-       {1329609600,[{785,785,785,785,169}]},
-       {1329955200,[{402,402,402,402,934}]},
-       {1330214400,[{795,795,795,795,459}]},
-       {1330300800,[{262,179,179,725,1746}]},
-       {1330387200,[{501,800,501,800,1124}]},
-       {1330473600,[{945,945,945,945,375}]},
-       {1330905600,[{640,640,640,640,795}]},
-       {1331164800,[{878,878,878,878,84}]}],
+        [[1328832000,566,282,282,653,2118],
+        [1328918400,935,935,935,935,919],
+        [1329091200,431,431,431,431,505],
+        [1329177600,546,495,495,546,1424],
+        [1329264000,323,323,323,323,154],
+        [1329350400,427,427,427,427,788],
+        [1329523200,561,561,561,561,902],
+        [1329609600,785,785,785,785,169],
+        [1329955200,402,402,402,402,934],
+        [1330214400,795,795,795,795,459],
+        [1330300800,262,179,179,725,1746],
+        [1330387200,501,800,501,800,1124],
+        [1330473600,945,945,945,945,375],
+        [1330905600,640,640,640,640,795],
+        [1331164800,878,878,878,878,84]],
+
 
     if
         DayReadShould == DayReadRes ->
@@ -319,13 +371,13 @@ selftest() ->
             io:format("read day scale check: false~n")
     end,
 
-    WeekReadRes = show(read(1328833307, 1331197296, week, S2)),
+    WeekReadRes = read(1328833307, 1331197296, week, S2),
     WeekReadShould =
-            [{1328486400,[{566,935,282,935,3037}]},
-            {1329091200,[{431,785,323,785,3942}]},
-            {1329696000,[{402,795,402,795,1393}]},
-            {1330300800,[{262,945,179,945,3245}]},
-            {1330905600,[{640,878,640,878,879}]}],
+        [[1328486400,566,935,282,935,3037],
+         [1329091200,431,785,323,785,3942],
+         [1329696000,402,795,402,795,1393],
+         [1330300800,262,945,179,945,3245],
+         [1330905600,640,878,640,878,879]],
 
     if
         WeekReadShould == WeekReadRes ->
@@ -334,10 +386,10 @@ selftest() ->
             io:format("read week scale check: false~n")
     end,
 
-    MonthReadRes = show(read(1328833307, 1331197296, month, S2)),
+    MonthReadRes = read(1328833307, 1331197296, month, S2),
     MonthReadShould =
-            [{1328054400,[{566,945,179,945,11617}]},
-            {1330560000,[{640,878,640,878,879}]}],
+        [[1328054400,566,945,179,945,11617],
+        [1330560000,640,878,640,878,879]],
         
     if
         MonthReadShould == MonthReadRes ->
