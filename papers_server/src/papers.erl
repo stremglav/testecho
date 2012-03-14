@@ -7,7 +7,7 @@
 -export([start_link/2,
         connect/0,
         add_records/2,
-        get_records/3,
+        get_records/4,
         show_all/1,
         clean_all/1,
         selftest/0]).
@@ -25,11 +25,13 @@ connect() ->
 start_link(Name, Args) ->
     gen_server:start_link({local, Name}, ?MODULE, Args, []).
 
+
+%% Debug API
 add_records(Name, Records) ->
     gen_server:call(Name, {add_records, Records}).
 
-get_records(Name, StartTime, FinishTime) ->
-    gen_server:call(Name, {get_records, StartTime, FinishTime}).
+get_records(Name, StartTime, FinishTime, Scale) ->
+    gen_server:call(Name, {get_records, StartTime, FinishTime, Scale}).
 
 show_all(Name) ->
     gen_server:call(Name, show_all).
@@ -49,8 +51,8 @@ init(Args) ->
   {ok, storage:new(Args)}.
 
 
-handle_call({get_records, StartTime, FinishTime}, _From, State) ->
-    List = storage:read(StartTime, FinishTime, State),
+handle_call({get_records, {StartTime, FinishTime, Scale}}, _From, State) ->
+    List = storage:read(StartTime, FinishTime, Scale, State),
     {reply, List, State};
 
 handle_call({add_records, Records}, _From, State) ->
@@ -108,18 +110,6 @@ selftest() ->
             io:format("add_records(): ok~n");
         true ->
             io:format("add_records(): false, res: ~p should be~p~n", [AddRes, AddShould])
-    end,
-    clean_all(test),
-    timer:sleep(100),
-
-    add_records(test, [{1,{1,1}}, {2,{2,2}}, {3,{3,3}}, {4,{4,4}}, {5,{5,5}}]),
-    GetRes = get_records(test, 2, 4),
-    GetShould = [{2, {2, 2}}, {3, {3, 3}}, {4, {4, 4}}],
-    if
-        GetRes == GetShould ->
-            io:format("get_records(): ok~n");
-        true ->
-            io:format("get_records(): false, res: ~p should be~p~n", [GetRes, GetShould])
     end,
     clean_all(test),
     timer:sleep(100),

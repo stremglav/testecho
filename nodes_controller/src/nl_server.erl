@@ -9,6 +9,7 @@
         show_all/0,
         get_free_node/0,
         add_records/2,
+        get_records/4,
         selftest/0]).
 
 %% gen_server callbacks
@@ -19,6 +20,9 @@
 start_link() ->
     gen_server:start_link({local, ?NODE_LIST_MODULE}, ?NODE_LIST_MODULE, [], []).
 
+
+
+%% Debug API
 show_all() ->
     gen_server:call(?NODE_LIST_MODULE, show_all).
 
@@ -28,11 +32,8 @@ get_free_node() ->
 add_records(Paper, Data) ->
     gen_server:call(?NODE_LIST_MODULE, {add_records, Paper, Data}).
 
-start_paper_server(Node, Paper, Data) ->
-    supervisor:start_child(
-        {?PAPER_SUPERVISOR, Node},
-        {Paper, {?PAPER_MODULE, start_link,[Paper, Data]}, permanent,1000,worker,[?PAPER_MODULE]}).
-
+get_records(Paper, StartTime, FinishTime, Scale) ->
+    gen_server:call(?NODE_LIST_MODULE, {get_records, Paper, {StartTime, FinishTime, Scale}}).
 
 
 
@@ -63,23 +64,17 @@ handle_call(show_all, _From, {NodeList, PaperAddrs}) ->
     Addrs_List = show_paper_addrs(PaperAddrs),
     {reply, {Node_List, Addrs_List}, {NodeList, PaperAddrs}};
 
-handle_call({add_records, Paper, Data}, _From, {NodeList, PaperAddrs}) ->
-    NewState = case get_addr_by_paper(Paper, PaperAddrs) of
-        {ok, Addr} -> 
-            gen_server:cast(Addr, {add_records, Data}),
-            {NodeList, PaperAddrs};
-        error ->
-            {Node, NewNodeList} = get_head_node(NodeList),
-            start_paper_server(Node, Paper, Data),
-            NewPaperAddrs = add_papper_addr(Paper, {Paper, Node}, PaperAddrs),
-            {NewNodeList, NewPaperAddrs}
-    end,
-    {reply, ok, NewState};
+handle_call({get_records, Paper, Date}, _From, State) ->
+    {Res, NewState} = request_handler(Paper, {get_records, Date}, [], State),
+    {reply, Res, NewState};
+
+
+handle_call({add_records, Paper, Data}, _From, State) ->
+    {Res, NewState} = request_handler(Paper, {add_records, Data}, Data, State),
+    {reply, Res, NewState};
 
 handle_call(_Msg, _From, State) ->
     {noreply, State}.
-
-
 
 
 handle_cast(stop, State) ->
@@ -102,9 +97,36 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+start_paper_server(Node, Paper, Data) ->
+    Result = supervisor:start_child(
+        {?PAPER_SUPERVISOR, Node},
+        {Paper, {?PAPER_MODULE, start_link,[Paper, Data]}, permanent,1000,worker,[?PAPER_MODULE]}),
+    case Result of
+        {ok, _} ->
+            ok;
+        {error,{already_started, _}} ->
+            ok;
+        _ ->
+            error
+    end.
+
 stop() ->
     gen_server:cast(?NODE_LIST_MODULE, stop).
 
+request_handler(Paper, Request, Data, {NodeList, PaperAddrs}) ->
+    case get_addr_by_paper(Paper, PaperAddrs) of
+        {ok, Addr} -> 
+            Res = gen_server:call(Addr, Request),
+            {Res, {NodeList, PaperAddrs}};
+        error ->
+            {Node, NewNodeList} = get_head_node(NodeList),
+            Res = start_paper_server(Node, Paper, Data),
+            NewPaperAddrs = add_papper_addr(Paper, {Paper, Node}, PaperAddrs),
+            {Res, {NewNodeList, NewPaperAddrs}}
+    end.
+
+
+%% Storage functions
 init_storage() ->
     {init_nl(), init_papers_addr()}.
 
